@@ -24,6 +24,12 @@ from rich.console import Console
 
 console = Console()
 
+# Default number of frames per camera for the static-rig COLMAP path. The rig
+# geometry is constant across frames, so a small evenly-spread sample is enough;
+# more frames add temporal feature tracks (better-constrained poses) but also
+# re-introduce moving foreground. Overridable via calibrate(calib_frames=...).
+_COLMAP_RIG_FRAMES = 3
+
 
 # ── Public API ──────────────────────────────────────────────────────────────────
 
@@ -858,7 +864,7 @@ def _run_colmap(
     # (people/objects) that produce spurious cross-camera matches and dilute the
     # static scene structure COLMAP should be triangulating. Pass calib_frames
     # to sample more (e.g. for slowly-moving rigs); None ⇒ 1 frame/camera.
-    n_per_cam = calib_frames if calib_frames is not None else 1
+    n_per_cam = calib_frames if calib_frames is not None else _COLMAP_RIG_FRAMES
 
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
