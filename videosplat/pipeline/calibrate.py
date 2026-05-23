@@ -82,7 +82,7 @@ def calibrate(
             mast3r_image_size=mast3r_image_size,
         )
     else:
-        meta = _run_colmap(cam_dirs, out_dir, sparse_dir, camera_model)
+        meta = _run_colmap(cam_dirs, out_dir, sparse_dir, camera_model, calib_frames)
 
     # Convert COLMAP-format output → poses_bounds.npy + cam*.mp4 so train.py works
     from videosplat.pipeline.convert import colmap_to_poses_bounds, frames_to_videos
@@ -836,6 +836,7 @@ def _run_colmap(
     out_dir: Path,
     sparse_dir: Path,
     camera_model: str,
+    calib_frames: int | None = None,
 ) -> dict:
     try:
         import pycolmap
@@ -845,14 +846,34 @@ def _run_colmap(
             "Install it: pip install pycolmap"
         )
 
-    # Flatten all frames into a single images/ directory, prefixed by cam ID.
-    # This lets COLMAP see frames from all cameras in one pass while the
-    # filename prefix encodes which physical camera each frame came from.
+    # Flatten frames into a single images/ directory, prefixed by cam ID, so
+    # COLMAP sees all cameras in one pass while the filename prefix encodes
+    # which physical camera each frame came from.
+    #
+    # For a static synchronised rig the geometry is identical in every frame,
+    # so we calibrate on a small subset per camera (default: 1 representative
+    # middle frame). This is both far faster — exhaustive matching is O(N²) in
+    # image count, so 18 images vs 1800 is seconds vs many hours — and cleaner:
+    # extra frames add redundant near-identical views plus moving foreground
+    # (people/objects) that produce spurious cross-camera matches and dilute the
+    # static scene structure COLMAP should be triangulating. Pass calib_frames
+    # to sample more (e.g. for slowly-moving rigs); None ⇒ 1 frame/camera.
+    n_per_cam = calib_frames if calib_frames is not None else 1
+
     images_dir = out_dir / "images"
     images_dir.mkdir(parents=True, exist_ok=True)
 
     for cam_dir in cam_dirs:
-        for frame in sorted(cam_dir.glob("frame_*.jpg")):
+        frames = sorted(cam_dir.glob("frame_*.jpg"))
+        if not frames:
+            continue
+        if n_per_cam >= len(frames):
+            selected = frames
+        elif n_per_cam == 1:
+            selected = [frames[len(frames) // 2]]   # middle: representative static view
+        else:
+            selected = [frames[i] for i in _evenly_spaced(len(frames), n_per_cam)]
+        for frame in selected:
             # Name: cam_00_frame_000000.jpg  →  unambiguous per-camera identity
             dst = images_dir / f"{cam_dir.name}_{frame.name}"
             if not dst.exists():
