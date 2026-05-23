@@ -32,6 +32,19 @@ from rich.console import Console
 
 console = Console()
 
+# The 4DGaussians dynerf reader (scene/neural_3D_dataset_NDC.py) hardcodes N3V's
+# native sensor width (2704) and derives the render focal as
+#     focal_render = stored_focal * img_wh / 2704
+# i.e. it ASSUMES the focal in poses_bounds is expressed in 2704-native pixels
+# (and ignores the H/W we store, overwriting them with its own img_wh). If we
+# instead store the focal at our downscaled extraction resolution, every camera
+# renders with a focal off by (extraction_width / 2704) → a too-wide FOV that
+# training silently overfits but the held-out test camera cannot, capping test
+# PSNR (~13) regardless of calibration accuracy. So we express the stored hwf at
+# this reference width. (Verified: our 1280-px focal × 2704/1280 ≈ the bundled
+# N3V ground-truth focal.)
+_DYNERF_REF_WIDTH = 2704
+
 
 # ── Public API ──────────────────────────────────────────────────────────────────
 
@@ -139,10 +152,15 @@ def colmap_to_poses_bounds(sparse_dir: Path, out_path: Path) -> int:
         R_llff[:, 1] = R_c2w[:, 0]    # LLFF col 1 = right (= OpenCV col 0)
         R_llff[:, 2] = -R_c2w[:, 2]   # LLFF col 2 = back  (= -OpenCV forward)
 
-        # Intrinsics from COLMAP camera
+        # Intrinsics from COLMAP camera. Rescale hwf to the dynerf reader's
+        # reference width (see _DYNERF_REF_WIDTH) so its hardcoded /2704
+        # normalization recovers the correct render focal at any extraction
+        # resolution. f/W ratio is preserved, so this is a pure unit change.
         cam = cameras.get(cam_id_used, list(cameras.values())[0])
         H, W = int(cam["height"]), int(cam["width"])
         focal = _focal_from_params(cam["model"], cam["params"])
+        _s   = _DYNERF_REF_WIDTH / W
+        H, W, focal = H * _s, W * _s, focal * _s
 
         # 3×5 pose: [R_llff | pos | [H; W; focal]]
         pose35 = np.zeros((3, 5))
