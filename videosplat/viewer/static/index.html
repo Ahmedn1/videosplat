@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{SCENE_NAME}} — VideoSplat</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #000; overflow: hidden; font-family: system-ui, sans-serif; }
+
+  /* ── Top bar ── */
+  #ui {
+    position: absolute; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 14px 18px; pointer-events: none; z-index: 10;
+  }
+  #scene-name {
+    color: #fff; font-size: 1rem; font-weight: 600;
+    text-shadow: 0 1px 4px rgba(0,0,0,.7);
+    background: rgba(0,0,0,.4); backdrop-filter: blur(6px);
+    padding: 6px 14px; border-radius: 8px;
+  }
+  #controls {
+    color: rgba(255,255,255,.6); font-size: .72rem; line-height: 1.75;
+    text-align: right;
+    background: rgba(0,0,0,.3); backdrop-filter: blur(6px);
+    padding: 7px 12px; border-radius: 8px;
+  }
+
+  /* ── Loading overlay ── */
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #0a0a0a; color: #ccc; gap: 14px; z-index: 20;
+  }
+  #loading h2 { font-size: 1.2rem; font-weight: 400; }
+  #progress-bar { width: 260px; height: 4px; background: #222; border-radius: 2px; overflow: hidden; }
+  #progress-fill { height: 100%; width: 0; background: #f97316; transition: width .08s; }
+  #loading-status { font-size: .78rem; color: #555; }
+
+  /* ── Frame-swap overlay (thin bar at top) ── */
+  #swap-bar {
+    position: absolute; top: 0; left: 0; right: 0; height: 3px;
+    background: #f97316; z-index: 30;
+    display: none;
+    animation: sweep 0.6s ease-in-out infinite alternate;
+  }
+  @keyframes sweep {
+    from { opacity: 0.4; } to { opacity: 1; }
+  }
+
+  /* ── Timeline panel (bottom) ── */
+  #timeline {
+    position: absolute; bottom: 0; left: 0; right: 0;
+    background: rgba(0,0,0,.55); backdrop-filter: blur(8px);
+    padding: 10px 18px 14px;
+    display: flex; flex-direction: column; gap: 8px;
+    z-index: 10;
+  }
+  #timeline-row {
+    display: flex; align-items: center; gap: 12px;
+  }
+  #play-btn {
+    flex-shrink: 0;
+    background: #f97316; border: none; border-radius: 50%;
+    width: 34px; height: 34px; cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background .15s;
+  }
+  #play-btn:hover { background: #fb923c; }
+  #play-btn svg { width: 14px; height: 14px; fill: #fff; }
+
+  #scrubber {
+    flex: 1;
+    -webkit-appearance: none; appearance: none;
+    height: 4px; border-radius: 2px; outline: none; cursor: pointer;
+    background: linear-gradient(to right, #f97316 0%, #f97316 0%, #444 0%);
+  }
+  #scrubber::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #f97316; cursor: pointer; border: 2px solid #fff;
+  }
+  #scrubber::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #f97316; cursor: pointer; border: 2px solid #fff;
+  }
+
+  #frame-counter {
+    flex-shrink: 0; color: rgba(255,255,255,.55);
+    font-size: .72rem; font-family: 'Courier New', monospace;
+    min-width: 60px; text-align: right;
+    transition: opacity .1s;
+  }
+
+  #timeline-labels {
+    display: flex; justify-content: space-between;
+    color: rgba(255,255,255,.3); font-size: .65rem;
+    padding: 0 2px;
+  }
+
+  /* ── Coords HUD ── */
+  #coords {
+    position: absolute; bottom: 80px; left: 18px;
+    color: rgba(255,255,255,.7); font-size: .68rem; line-height: 1.6;
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,.4); backdrop-filter: blur(6px);
+    padding: 5px 10px; border-radius: 6px;
+    pointer-events: none; white-space: pre; z-index: 10;
+  }
+</style>
+</head>
+<body>
+
+<div id="ui">
+  <div id="scene-name">{{SCENE_NAME}}</div>
+  <div id="controls">
+    Left-drag — orbit<br>
+    Right-drag — pan<br>
+    Scroll — zoom<br>
+    WASD — fly
+  </div>
+</div>
+
+<div id="swap-bar"></div>
+<div id="coords"></div>
+
+<div id="loading">
+  <h2 id="loading-title">Loading scene…</h2>
+  <div id="progress-bar"><div id="progress-fill"></div></div>
+  <div id="loading-status"></div>
+</div>
+
+<div id="timeline" style="display:none">
+  <div id="timeline-row">
+    <button id="play-btn" title="Play / Pause">
+      <svg id="icon-play"  viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>
+      <svg id="icon-pause" viewBox="0 0 24 24" style="display:none"><path d="M6 19h4V5H6zm8-14v14h4V5z"/></svg>
+    </button>
+    <input id="scrubber" type="range" min="0" max="0" value="0" step="1">
+    <span id="frame-counter">0 / 0</span>
+  </div>
+  <div id="timeline-labels">
+    <span>0 s</span>
+    <span id="label-mid"></span>
+    <span id="label-end"></span>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as GaussianSplats3D from 'https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js';
+
+(async () => {
+
+  // ── Load scene metadata ───────────────────────────────────────────────────────
+  const meta = await fetch('scene_meta.json').then(r => r.ok ? r.json() : null);
+  const N_FRAMES = meta?.n_keyframes ?? 1;
+  const FPS      = meta?.fps ?? 8;
+  const cameras  = meta?.cameras ?? [];
+
+  const framePaths = Array.from({length: N_FRAMES}, (_, i) =>
+    `frames/keyframe_${String(i).padStart(4, '0')}.ply`
+  );
+
+  // ── Initial camera pose ───────────────────────────────────────────────────────
+  let camPos = undefined, camLookAt = undefined;
+  if (cameras.length > 0) {
+    const cam = cameras[Math.floor(cameras.length / 2)];
+    const p = cam.pos, fwd = cam.forward;
+    camPos    = p;
+    camLookAt = [p[0] + fwd[0], p[1] + fwd[1], p[2] + fwd[2]];
+  } else if (meta?.scene_center) {
+    const c = meta.scene_center;
+    const r = meta.scene_radius ?? 5.0;
+    camLookAt = c;
+    // Position camera in front of and slightly above scene center
+    // Y-down convention: negative Y = up, so subtract for "above"
+    camPos = [c[0], c[1] - r * 0.3, c[2] - r * 2.5];
+  }
+
+  // ── Build viewer ──────────────────────────────────────────────────────────────
+  const viewerOpts = {
+    cameraUp: [0, -1, 0],
+    selfDrivenMode: true,
+    useBuiltInControls: true,
+    renderMode: GaussianSplats3D.RenderMode.Always,
+  };
+  if (camPos)    viewerOpts.initialCameraPosition = camPos;
+  if (camLookAt) viewerOpts.initialCameraLookAt   = camLookAt;
+
+  const viewer = new GaussianSplats3D.Viewer(viewerOpts);
+
+  // ── Load frame 0 ─────────────────────────────────────────────────────────────
+  const progressFill  = document.getElementById('progress-fill');
+  const loadingStatus = document.getElementById('loading-status');
+  const loadingTitle  = document.getElementById('loading-title');
+  const loading       = document.getElementById('loading');
+
+  loadingTitle.textContent = 'Loading frame 0…';
+  progressFill.style.width = '60%';
+
+  await viewer.addSplatScene(framePaths[0], {
+    splatAlphaRemovalThreshold: 10,
+    showLoadingUI: false,
+  });
+
+  progressFill.style.width = '100%';
+  await new Promise(r => setTimeout(r, 120));
+  loading.style.display = 'none';
+  viewer.start();
+
+  // ── Timeline UI ───────────────────────────────────────────────────────────────
+  const timeline    = document.getElementById('timeline');
+  const scrubber    = document.getElementById('scrubber');
+  const counter     = document.getElementById('frame-counter');
+  const playBtn     = document.getElementById('play-btn');
+  const iconPlay    = document.getElementById('icon-play');
+  const iconPause   = document.getElementById('icon-pause');
+  const labelMid    = document.getElementById('label-mid');
+  const labelEnd    = document.getElementById('label-end');
+  const swapBar     = document.getElementById('swap-bar');
+
+  scrubber.max = N_FRAMES - 1;
+  counter.textContent = `0 / ${N_FRAMES - 1}`;
+  const duration = (N_FRAMES - 1) / FPS;
+  labelMid.textContent = `${(duration / 2).toFixed(1)} s`;
+  labelEnd.textContent = `${duration.toFixed(1)} s`;
+  timeline.style.display = '';
+
+  function updateScrubberFill(val) {
+    const pct = N_FRAMES > 1 ? (val / (N_FRAMES - 1)) * 100 : 0;
+    scrubber.style.background =
+      `linear-gradient(to right, #f97316 ${pct}%, #f97316 ${pct}%, #444 ${pct}%)`;
+  }
+
+  let currentFrame    = 0;
+  let isTransitioning = false;
+
+  // Load frames on demand — no pre-caching (each frame is ~40 MB).
+  // removeSplatScene + addSplatScene swaps in the new frame; the viewer
+  // always has exactly one scene loaded at a time.
+  async function showFrame(idx) {
+    if (idx === currentFrame || isTransitioning) return;
+    isTransitioning  = true;
+    swapBar.style.display = 'block';
+
+    try {
+      await viewer.removeSplatScene(0, false);
+      await viewer.addSplatScene(framePaths[idx], {
+        splatAlphaRemovalThreshold: 5,
+        showLoadingUI: false,
+      });
+      currentFrame = idx;
+    } finally {
+      scrubber.value = currentFrame;
+      counter.textContent  = `${currentFrame} / ${N_FRAMES - 1}`;
+      updateScrubberFill(currentFrame);
+      swapBar.style.display = 'none';
+      isTransitioning = false;
+    }
+  }
+
+  updateScrubberFill(0);
+
+  // Debounce scrubber so rapid dragging doesn't queue concurrent swaps
+  let scrubTimer = null;
+  scrubber.addEventListener('input', () => {
+    isPlaying = false;
+    iconPlay.style.display  = '';
+    iconPause.style.display = 'none';
+    clearTimeout(scrubTimer);
+    scrubTimer = setTimeout(() => showFrame(Number(scrubber.value)), 80);
+  });
+
+  // ── Playback ──────────────────────────────────────────────────────────────────
+  let isPlaying       = false;
+  let playLoopRunning = false;
+  const frameMs       = 1000 / FPS;
+
+  async function playLoop() {
+    if (playLoopRunning) return;
+    playLoopRunning = true;
+    while (isPlaying) {
+      const t0   = performance.now();
+      await showFrame((currentFrame + 1) % N_FRAMES);
+      const elapsed = performance.now() - t0;
+      const wait    = Math.max(0, frameMs - elapsed);
+      if (isPlaying && wait > 0) await new Promise(r => setTimeout(r, wait));
+    }
+    playLoopRunning = false;
+  }
+
+  playBtn.addEventListener('click', () => {
+    isPlaying = !isPlaying;
+    iconPlay.style.display  = isPlaying ? 'none' : '';
+    iconPause.style.display = isPlaying ? '' : 'none';
+    if (isPlaying) playLoop();
+  });
+
+  document.addEventListener('keydown', e => {
+    if (e.code === 'Space' && e.target === document.body) {
+      e.preventDefault();
+      playBtn.click();
+    }
+  });
+
+  // ── Camera HUD ────────────────────────────────────────────────────────────────
+  const coordsEl = document.getElementById('coords');
+  const fmt = n => n.toFixed(3).padStart(8);
+  (function tick() {
+    requestAnimationFrame(tick);
+    const p = viewer.camera && viewer.camera.position;
+    if (p) coordsEl.textContent = `x:${fmt(p.x)}  y:${fmt(p.y)}  z:${fmt(p.z)}`;
+  })();
+
+})();
+</script>
+
+</body>
+</html>

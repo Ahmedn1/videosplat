@@ -1,0 +1,30 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "videosplat"
+version = "0.1.0"
+description = "Free-viewpoint video replay via 4D Gaussian Splatting"
+requires-python = ">=3.10"
+dependencies = [
+    "typer>=0.12",
+    "rich>=13",
+    "opencv-python-headless>=4.8",
+    "numpy>=1.24",
+    "scipy>=1.11",
+    "plyfile>=1.0",
+    "pycolmap>=0.6",
+]
+
+[project.optional-dependencies]
+audio = [
+    "librosa>=0.10",
+    "soundfile>=0.12",
+]
+
+[project.scripts]
+videosplat = "videosplat.cli:app"
+
+[tool.hatch.build.targets.wheel]
+packages = ["videosplat"]

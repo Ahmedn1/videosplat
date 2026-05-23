@@ -1,0 +1,433 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{{SCENE_NAME}} — path editor</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #0a0a0a; font-family: system-ui, sans-serif; display: flex; height: 100vh; overflow: hidden; }
+
+  /* ── 3D viewport ── */
+  #viewport { flex: 1; position: relative; }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 300px; flex-shrink: 0;
+    background: #111; border-left: 1px solid #222;
+    display: flex; flex-direction: column;
+    color: #ccc; font-size: .82rem;
+    overflow: hidden;
+  }
+  #sidebar-header {
+    padding: 14px 16px 10px;
+    border-bottom: 1px solid #222;
+  }
+  #sidebar-header h1 { font-size: 1rem; font-weight: 600; color: #fff; margin-bottom: 2px; }
+  #sidebar-header p  { font-size: .72rem; color: #555; line-height: 1.5; }
+
+  /* controls help */
+  #controls-help {
+    padding: 10px 16px;
+    border-bottom: 1px solid #1a1a1a;
+    color: #444; font-size: .68rem; line-height: 1.7;
+  }
+
+  /* look-at target */
+  #lookat-section {
+    padding: 10px 16px;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  #lookat-section label { display: block; color: #777; font-size: .68rem; margin-bottom: 6px; text-transform: uppercase; letter-spacing: .04em; }
+  #lookat-display {
+    font-family: 'Courier New', monospace; font-size: .72rem; color: #f97316;
+    background: #1a1a1a; border-radius: 5px; padding: 5px 9px;
+    margin-bottom: 7px;
+  }
+  .btn-sm {
+    background: #222; border: 1px solid #333; color: #aaa;
+    padding: 5px 10px; border-radius: 5px; cursor: pointer; font-size: .72rem;
+    transition: background .15s, color .15s;
+  }
+  .btn-sm:hover { background: #2a2a2a; color: #fff; }
+
+  /* waypoints list */
+  #waypoints-section {
+    flex: 1; overflow-y: auto; padding: 10px 16px;
+    border-bottom: 1px solid #1a1a1a;
+  }
+  #waypoints-section label { display: block; color: #777; font-size: .68rem; margin-bottom: 8px; text-transform: uppercase; letter-spacing: .04em; }
+  #waypoint-list { display: flex; flex-direction: column; gap: 6px; }
+
+  .waypoint-item {
+    background: #1a1a1a; border: 1px solid #2a2a2a; border-radius: 6px;
+    padding: 8px 10px; display: flex; align-items: flex-start; gap: 8px;
+    cursor: pointer; transition: border-color .15s;
+  }
+  .waypoint-item:hover { border-color: #f97316; }
+  .waypoint-item.active { border-color: #f97316; background: #1e1510; }
+  .waypoint-num {
+    background: #f97316; color: #fff; border-radius: 50%;
+    width: 20px; height: 20px; flex-shrink: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: .65rem; font-weight: 700; margin-top: 1px;
+  }
+  .waypoint-info { flex: 1; min-width: 0; }
+  .waypoint-pos { font-family: 'Courier New', monospace; font-size: .65rem; color: #888; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .waypoint-del {
+    background: none; border: none; color: #444; cursor: pointer;
+    font-size: .9rem; padding: 0 2px; line-height: 1;
+    flex-shrink: 0; margin-top: 1px;
+    transition: color .15s;
+  }
+  .waypoint-del:hover { color: #e55; }
+
+  #empty-msg { color: #333; font-size: .75rem; text-align: center; padding: 20px 0; }
+
+  /* bottom buttons */
+  #sidebar-footer { padding: 12px 16px; display: flex; flex-direction: column; gap: 8px; }
+  .btn-add {
+    background: #f97316; border: none; color: #fff;
+    padding: 9px; border-radius: 7px; cursor: pointer; font-size: .82rem; font-weight: 600;
+    transition: background .15s;
+  }
+  .btn-add:hover { background: #fb923c; }
+  .btn-add:disabled { background: #333; color: #555; cursor: not-allowed; }
+  .btn-row { display: flex; gap: 6px; }
+  .btn-action {
+    flex: 1; background: #1a1a1a; border: 1px solid #333; color: #aaa;
+    padding: 8px; border-radius: 6px; cursor: pointer; font-size: .76rem;
+    transition: background .15s, color .15s, border-color .15s;
+  }
+  .btn-action:hover { background: #222; color: #fff; border-color: #555; }
+  .btn-action:disabled { opacity: .35; cursor: not-allowed; }
+  .btn-export {
+    background: #163020; border-color: #2a5a3a; color: #4ade80;
+  }
+  .btn-export:hover { background: #1e4030; border-color: #3a7a50; color: #6aee90; }
+  .btn-export:disabled { background: #1a1a1a; border-color: #333; color: #555; }
+
+  /* loading overlay */
+  #loading {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: #0a0a0a; color: #ccc; gap: 14px; z-index: 20;
+  }
+  #loading h2 { font-size: 1.1rem; font-weight: 400; }
+  #progress-bar { width: 240px; height: 3px; background: #222; border-radius: 2px; overflow: hidden; }
+  #progress-fill { height: 100%; width: 0; background: #f97316; transition: width .1s; }
+
+  /* HUD */
+  #cam-hud {
+    position: absolute; bottom: 12px; left: 12px;
+    color: rgba(255,255,255,.55); font-size: .65rem; line-height: 1.6;
+    font-family: 'Courier New', monospace;
+    background: rgba(0,0,0,.45); backdrop-filter: blur(6px);
+    padding: 5px 10px; border-radius: 6px;
+    pointer-events: none; white-space: pre; z-index: 10;
+  }
+
+  /* path preview overlay */
+  #path-status {
+    position: absolute; top: 12px; left: 12px;
+    color: #f97316; font-size: .72rem;
+    background: rgba(0,0,0,.5); backdrop-filter: blur(4px);
+    padding: 4px 10px; border-radius: 5px;
+    pointer-events: none; display: none;
+  }
+</style>
+</head>
+<body>
+
+<div id="viewport">
+  <div id="loading">
+    <h2>Loading scene…</h2>
+    <div id="progress-bar"><div id="progress-fill"></div></div>
+  </div>
+  <div id="cam-hud"></div>
+  <div id="path-status"></div>
+</div>
+
+<div id="sidebar">
+  <div id="sidebar-header">
+    <h1>Camera Path Editor</h1>
+    <p>{{SCENE_NAME}}</p>
+  </div>
+
+  <div id="controls-help">
+    Left-drag — orbit &nbsp;·&nbsp; Right-drag — pan<br>
+    Scroll — zoom &nbsp;·&nbsp; WASD — fly
+  </div>
+
+  <div id="lookat-section">
+    <label>Look-at target</label>
+    <div id="lookat-display">—</div>
+    <div style="display:flex;gap:6px">
+      <button class="btn-sm" id="btn-set-lookat" title="Use current orbit center as look-at target">Use orbit center</button>
+      <button class="btn-sm" id="btn-reset-lookat">Reset</button>
+    </div>
+  </div>
+
+  <div id="waypoints-section">
+    <label>Waypoints <span id="wp-count" style="color:#555">(0)</span></label>
+    <div id="waypoint-list">
+      <div id="empty-msg">No waypoints yet.<br>Navigate then click Add.</div>
+    </div>
+  </div>
+
+  <div id="sidebar-footer">
+    <button class="btn-add" id="btn-add">+ Add waypoint</button>
+    <div class="btn-row">
+      <button class="btn-action" id="btn-clear" disabled>Clear all</button>
+      <button class="btn-action btn-export" id="btn-export" disabled>Export path.json</button>
+    </div>
+  </div>
+</div>
+
+<script type="importmap">
+{
+  "imports": {
+    "three": "https://cdn.jsdelivr.net/npm/three@0.170.0/build/three.module.js",
+    "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.170.0/examples/jsm/"
+  }
+}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import * as GaussianSplats3D from 'https://cdn.jsdelivr.net/npm/@mkkellogg/gaussian-splats-3d@0.4.7/build/gaussian-splats-3d.module.js';
+
+(async () => {
+
+  // ── Load metadata ─────────────────────────────────────────────────────────
+  const meta = await fetch('scene_meta.json').then(r => r.ok ? r.json() : null);
+  const cameras = meta?.cameras ?? [];
+
+  const framePath = 'frames/keyframe_0000.ply';
+
+  // ── Initial camera pose ───────────────────────────────────────────────────
+  let camPos = undefined, camLookAt = undefined;
+  if (cameras.length > 0) {
+    const cam = cameras[Math.floor(cameras.length / 2)];
+    const p = cam.pos, fwd = cam.forward;
+    camPos    = p;
+    camLookAt = [p[0] + fwd[0], p[1] + fwd[1], p[2] + fwd[2]];
+  } else if (meta?.scene_center) {
+    const c = meta.scene_center;
+    const r = meta.scene_radius ?? 5.0;
+    camLookAt = c;
+    camPos = [c[0], c[1] - r * 0.3, c[2] - r * 2.5];
+  }
+
+  // ── Build viewer ──────────────────────────────────────────────────────────
+  const container = document.getElementById('viewport');
+  const viewerOpts = {
+    rootElement: container,
+    cameraUp: [0, -1, 0],
+    selfDrivenMode: true,
+    useBuiltInControls: true,
+    renderMode: GaussianSplats3D.RenderMode.Always,
+  };
+  if (camPos)    viewerOpts.initialCameraPosition = camPos;
+  if (camLookAt) viewerOpts.initialCameraLookAt   = camLookAt;
+
+  const viewer = new GaussianSplats3D.Viewer(viewerOpts);
+
+  // ── Load first frame ──────────────────────────────────────────────────────
+  document.getElementById('progress-fill').style.width = '60%';
+  await viewer.addSplatScene(framePath, {
+    splatAlphaRemovalThreshold: 10,
+    showLoadingUI: false,
+  });
+  document.getElementById('progress-fill').style.width = '100%';
+  await new Promise(r => setTimeout(r, 100));
+  document.getElementById('loading').style.display = 'none';
+  viewer.start();
+
+  // ── Path editor state ─────────────────────────────────────────────────────
+  const waypoints = [];  // [{pos:[x,y,z], lookAt:[x,y,z]}]
+  let lookAtTarget = null;  // user-chosen look-at point (null = auto from orbit center)
+
+  // ── Access controls ───────────────────────────────────────────────────────
+  function getOrbitTarget() {
+    // Try various property names used by mkkellogg versions
+    const ctrl = viewer.controls ?? viewer.orbitControls ?? viewer.threeScene?.orbitControls;
+    if (ctrl?.target) return ctrl.target.toArray();
+    // Fallback: use camera forward projected 8 units
+    const cam = viewer.camera;
+    const fwd = new THREE.Vector3();
+    cam.getWorldDirection(fwd);
+    return cam.position.clone().add(fwd.multiplyScalar(8)).toArray();
+  }
+
+  function getCameraPos() {
+    return viewer.camera.position.toArray();
+  }
+
+  // ── Look-at target UI ─────────────────────────────────────────────────────
+  const lookAtDisplay = document.getElementById('lookat-display');
+
+  function updateLookAtDisplay() {
+    if (lookAtTarget) {
+      const [x, y, z] = lookAtTarget.map(v => v.toFixed(2));
+      lookAtDisplay.textContent = `x:${x}  y:${y}  z:${z}`;
+    } else {
+      lookAtDisplay.textContent = '— (orbit center)';
+    }
+  }
+  updateLookAtDisplay();
+
+  document.getElementById('btn-set-lookat').addEventListener('click', () => {
+    lookAtTarget = getOrbitTarget();
+    updateLookAtDisplay();
+  });
+  document.getElementById('btn-reset-lookat').addEventListener('click', () => {
+    lookAtTarget = null;
+    updateLookAtDisplay();
+  });
+
+  // ── Waypoint management ───────────────────────────────────────────────────
+  function resolvedLookAt() {
+    return lookAtTarget ? [...lookAtTarget] : getOrbitTarget();
+  }
+
+  function renderList() {
+    const list = document.getElementById('waypoint-list');
+    const empty = document.getElementById('empty-msg');
+    const count = document.getElementById('wp-count');
+    count.textContent = `(${waypoints.length})`;
+
+    if (waypoints.length === 0) {
+      empty.style.display = '';
+      list.innerHTML = '';
+      list.appendChild(empty);
+      document.getElementById('btn-clear').disabled  = true;
+      document.getElementById('btn-export').disabled = true;
+      return;
+    }
+
+    document.getElementById('btn-clear').disabled  = false;
+    document.getElementById('btn-export').disabled = false;
+
+    const items = waypoints.map((wp, i) => {
+      const [x, y, z] = wp.pos.map(v => v.toFixed(2));
+      const div = document.createElement('div');
+      div.className = 'waypoint-item';
+      div.innerHTML = `
+        <div class="waypoint-num">${i + 1}</div>
+        <div class="waypoint-info">
+          <div style="color:#ccc;margin-bottom:2px">Waypoint ${i + 1}</div>
+          <div class="waypoint-pos">pos: ${x}, ${y}, ${z}</div>
+        </div>
+        <button class="waypoint-del" data-idx="${i}" title="Delete">✕</button>
+      `;
+      // click item → fly camera to this position
+      div.addEventListener('click', (e) => {
+        if (e.target.classList.contains('waypoint-del')) return;
+        flyTo(wp);
+      });
+      return div;
+    });
+
+    list.innerHTML = '';
+    items.forEach(el => list.appendChild(el));
+
+    list.querySelectorAll('.waypoint-del').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const idx = parseInt(btn.dataset.idx);
+        waypoints.splice(idx, 1);
+        renderList();
+        updatePathViz();
+      });
+    });
+  }
+
+  function flyTo(wp) {
+    // Animate camera to waypoint position (instant for now)
+    viewer.camera.position.set(...wp.pos);
+    const ctrl = viewer.controls ?? viewer.orbitControls;
+    if (ctrl?.target) ctrl.target.set(...wp.lookAt);
+  }
+
+  document.getElementById('btn-add').addEventListener('click', () => {
+    const pos    = getCameraPos();
+    const lookAt = resolvedLookAt();
+    waypoints.push({ pos, lookAt });
+    renderList();
+    updatePathViz();
+  });
+
+  document.getElementById('btn-clear').addEventListener('click', () => {
+    if (!confirm('Clear all waypoints?')) return;
+    waypoints.length = 0;
+    renderList();
+    updatePathViz();
+  });
+
+  // ── Export ────────────────────────────────────────────────────────────────
+  document.getElementById('btn-export').addEventListener('click', () => {
+    if (waypoints.length < 2) {
+      alert('Add at least 2 waypoints to export a path.');
+      return;
+    }
+    // Export viewer FOV so the renderer can match the perspective exactly.
+    const cam = viewer.camera;
+    const fovY  = cam?.fov   ?? 60;          // vertical FOV in degrees
+    const aspect = cam?.aspect ?? (window.innerWidth / window.innerHeight);
+    const data = { waypoints, fovY, aspect, scene: meta?.scene_name ?? '{{SCENE_NAME}}' };
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'camera_path.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+  });
+
+  // ── Path visualisation ────────────────────────────────────────────────────
+  // Draw a dashed line through the waypoints so user can see the path.
+  let pathLine = null;
+
+  function updatePathViz() {
+    const scene = viewer.threeScene ?? viewer.scene;
+    if (!scene) return;
+
+    if (pathLine) { scene.remove(pathLine); pathLine = null; }
+
+    if (waypoints.length < 2) {
+      document.getElementById('path-status').style.display = 'none';
+      return;
+    }
+
+    const points = waypoints.map(wp => new THREE.Vector3(...wp.pos));
+    // Add smooth intermediate points via Catmull-Rom
+    const curve = new THREE.CatmullRomCurve3(points, false, 'centripetal');
+    const pts   = curve.getPoints(Math.max(50, waypoints.length * 10));
+    const geo   = new THREE.BufferGeometry().setFromPoints(pts);
+    const mat   = new THREE.LineBasicMaterial({ color: 0xf97316, linewidth: 2 });
+    pathLine = new THREE.Line(geo, mat);
+    scene.add(pathLine);
+
+    const status = document.getElementById('path-status');
+    status.style.display = 'block';
+    status.textContent   = `Path: ${waypoints.length} waypoints`;
+  }
+
+  // ── Camera HUD ────────────────────────────────────────────────────────────
+  const hud = document.getElementById('cam-hud');
+  const fmt = n => n.toFixed(3).padStart(8);
+  (function tick() {
+    requestAnimationFrame(tick);
+    const p = viewer.camera?.position;
+    if (!p) return;
+    const target = getOrbitTarget();
+    const [tx, ty, tz] = target.map(v => v.toFixed(2));
+    hud.textContent =
+      `cam  x:${fmt(p.x)}  y:${fmt(p.y)}  z:${fmt(p.z)}\n` +
+      `aim  x:${tx.padStart(8)}  y:${ty.padStart(8)}  z:${tz.padStart(8)}`;
+  })();
+
+  renderList();
+
+})();
+</script>
+</body>
+</html>

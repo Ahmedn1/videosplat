@@ -1,0 +1,26 @@
+# Heavy / generated artifacts (local only)
+# data/    input datasets (N3V, etc.) ~44 GB
+# outputs/ trained models, keyframes, viewers ~68 GB
+# .venv/   virtualenv ~8 GB
+data/
+outputs/
+.venv/
+
+# Researcher skill (untracked source of truth)
+.lab/
+run.log
+
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local agent / editor state
+.claude/
+.vscode/
+.idea/
+*.swp
