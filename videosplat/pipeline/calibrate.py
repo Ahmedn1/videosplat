@@ -28,7 +28,7 @@ console = Console()
 # geometry is constant across frames, so a small evenly-spread sample is enough;
 # more frames add temporal feature tracks (better-constrained poses) but also
 # re-introduce moving foreground. Overridable via calibrate(calib_frames=...).
-_COLMAP_RIG_FRAMES = 3
+_COLMAP_RIG_FRAMES = 5
 
 
 # ── Public API ──────────────────────────────────────────────────────────────────
