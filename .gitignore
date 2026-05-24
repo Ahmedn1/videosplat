@@ -10,6 +10,9 @@ outputs/
 .lab/
 run.log
 
+# Stray generated frames dumped at cwd by the 4DGaussians dynerf reader
+/images/
+
 # Python
 __pycache__/
 *.py[cod]
