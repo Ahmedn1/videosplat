@@ -146,6 +146,9 @@ def render_keyframes(
     python_exe: str,
     env: dict,
     configs: str | None = None,
+    prune_opacity: float = 0.05,
+    prune_scale_mult: float = 5.0,
+    prune_dist_mult: float = 3.0,
 ) -> list[Path]:
     """
     Run bake_4dgs_keyframes.py as a subprocess with 4DGaussians on PYTHONPATH.
@@ -168,6 +171,9 @@ def render_keyframes(
     ]
     if configs:
         cmd += ["--configs", str(configs)]
+    cmd += ["--prune-opacity", str(prune_opacity),
+            "--prune-scale-mult", str(prune_scale_mult),
+            "--prune-dist-mult", str(prune_dist_mult)]
 
     result = subprocess.run(cmd, env=env, cwd=str(backend_dir))
     if result.returncode != 0:
@@ -191,6 +197,9 @@ def train_nerfies(
     n_keyframes: int = 100,
     train_python: str | None = None,
     extra_args: list[str] | None = None,
+    prune_opacity: float = 0.05,
+    prune_scale_mult: float = 5.0,
+    prune_dist_mult: float = 3.0,
 ) -> Path:
     """Train 4DGaussians in nerfies/HyperNeRF mode (casual moving/heterogeneous
     cams), then bake keyframes. Auto-detected as nerfies via dataset.json (and the
@@ -235,7 +244,8 @@ def train_nerfies(
     console.print(f"  Baking {n_keyframes} keyframe snapshots…")
     render_keyframes(model_path=model_path, backend_dir=backend_dir, source_path=source_path,
                      n_keyframes=n_keyframes, iterations=iterations, python_exe=python_exe,
-                     env=env, configs=configs)
+                     env=env, configs=configs, prune_opacity=prune_opacity,
+                     prune_scale_mult=prune_scale_mult, prune_dist_mult=prune_dist_mult)
     return model_path
 
 

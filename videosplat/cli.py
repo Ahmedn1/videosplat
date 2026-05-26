@@ -682,6 +682,10 @@ def casual(
     max_init_pts: Annotated[int, typer.Option("--max-init-pts")] = 100_000,
     iterations: Annotated[int, typer.Option("--iterations")] = 14_000,
     bake_keyframes: Annotated[int, typer.Option("--keyframes", help="Keyframes to bake for the viewer.")] = 100,
+    # viewer floater pruning (free-orbit viewers fly through faint/huge floaters → haze)
+    prune_opacity: Annotated[float, typer.Option("--prune-opacity", help="Cull viewer Gaussians below this opacity (0=off).")] = 0.05,
+    prune_scale_mult: Annotated[float, typer.Option("--prune-scale-mult", help="Cull Gaussians with max-scale > mult×p99 (0=off).")] = 5.0,
+    prune_dist_mult: Annotated[float, typer.Option("--prune-dist-mult", help="Cull Gaussians > mult×p90-radius from center (0=off).")] = 3.0,
     configs: Annotated[Optional[str], typer.Option("--configs", help="4DGaussians config (default: backend hypernerf/default.py).")] = None,
     # safety
     vram_guard: Annotated[int, typer.Option("--vram-guard", help="Kill the run if total GPU VRAM exceeds this many MiB (0=off). Protects a display-shared GPU.")] = 12000,
@@ -730,7 +734,8 @@ def casual(
         if not skip_train:
             train_nerfies(out_dir, out_dir / "model", backend, configs=cfg,
                           iterations=iterations, n_keyframes=bake_keyframes,
-                          train_python=sys.executable)
+                          train_python=sys.executable, prune_opacity=prune_opacity,
+                          prune_scale_mult=prune_scale_mult, prune_dist_mult=prune_dist_mult)
             export_casual_viewer(out_dir, label=(name or source.name))
         console.print(Panel(
             f"Done!  nerfies model + viewer → {out_dir}\n\n"

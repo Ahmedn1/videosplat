@@ -106,6 +106,16 @@ def main():
                         help="4DGaussians config (e.g. arguments/hypernerf/default.py). "
                              "REQUIRED if the model was trained with one — the deformation "
                              "net architecture (net_width/grid) must match or load_model fails.")
+    # Floater pruning for VIEWER-friendly keyframes. The rasterizer/trained-adjacent
+    # render tolerates faint/huge floaters; free-orbit viewers fly through them →
+    # streaky haze. Prune them (a CONSISTENT mask from the canonical model, applied
+    # to every keyframe so playback doesn't flicker). 0 disables each.
+    parser.add_argument("--prune-opacity",   type=float, default=0.05,
+                        help="cull Gaussians with sigmoid(opacity) below this (0=off).")
+    parser.add_argument("--prune-scale-mult", type=float, default=5.0,
+                        help="cull Gaussians with max-scale > mult × p99 max-scale (0=off).")
+    parser.add_argument("--prune-dist-mult",  type=float, default=3.0,
+                        help="cull Gaussians farther than mult × p90 radius from the scene center (0=off).")
     args = parser.parse_args()
 
     model_path  = Path(args.model_path)
@@ -148,6 +158,27 @@ def main():
     gaussians.load_model(str(deform_dir))
     gaussians._deformation.eval()
 
+    # ── Floater prune mask (computed ONCE from the canonical model → consistent
+    #     across all keyframes, so playback doesn't flicker) ─────────────────────
+    keep_mask = None
+    with torch.no_grad():
+        opac_c = gaussians.get_opacity.detach().cpu().numpy().ravel()        # sigmoid
+        scale_c = gaussians.get_scaling.detach().cpu().numpy()               # exp
+        xyz_c = gaussians.get_xyz.detach().cpu().numpy()
+    keep = np.ones(len(opac_c), bool)
+    if args.prune_opacity > 0:
+        keep &= opac_c >= args.prune_opacity
+    if args.prune_scale_mult > 0:
+        smax = scale_c.max(1); keep &= smax <= args.prune_scale_mult * np.percentile(smax, 99)
+    if args.prune_dist_mult > 0:
+        ctr = np.median(xyz_c, 0); dist = np.linalg.norm(xyz_c - ctr, axis=1)
+        keep &= dist <= args.prune_dist_mult * np.percentile(dist, 90)
+    if not keep.all():
+        keep_mask = torch.from_numpy(keep).cuda()
+        print(f"floater prune: {len(keep):,} → {int(keep.sum()):,} kept "
+              f"({100*(1-keep.mean()):.1f}% culled: opacity<{args.prune_opacity}, "
+              f"scale>{args.prune_scale_mult}×p99, dist>{args.prune_dist_mult}×p90)")
+
     # ── Collect static attributes that don't deform ───────────────────────────
     from utils.render_utils import get_state_at_time
 
@@ -159,6 +190,9 @@ def main():
         cam = _TimestampCamera(t)
         with torch.no_grad():
             xyz_t, scale_t, rot_t, opac_t, shs_t = get_state_at_time(gaussians, cam)
+        if keep_mask is not None:
+            xyz_t, scale_t, rot_t = xyz_t[keep_mask], scale_t[keep_mask], rot_t[keep_mask]
+            opac_t, shs_t = opac_t[keep_mask], shs_t[keep_mask]
 
         xyz_np   = xyz_t.detach().cpu().numpy()
         rot_np   = rot_t.detach().cpu().numpy()
