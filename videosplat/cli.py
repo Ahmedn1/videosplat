@@ -659,6 +659,8 @@ def casual(
     output: Annotated[Optional[Path], typer.Option("--output", "-o")] = None,
     name: Annotated[str, typer.Option("--name", "-n", help="Scene label")] = "",
     moving_cams: Annotated[str, typer.Option("--moving-cams", help="Comma-sep indices of cameras that MOVE, e.g. '2' or '0,2'. Empty = all static.")] = "",
+    holdout_cams: Annotated[str, typer.Option("--holdout-cams", help="Comma-sep camera indices to hold out ENTIRELY for novel-VIEW eval (e.g. '2,6'). Empty = held-out-time split.")] = "",
+    audio_sync: Annotated[bool, typer.Option("--audio-sync/--no-audio-sync", help="Cross-correlate audio to align cameras. Disable for hardware-synced rigs (e.g. AIST) to avoid spurious sub-frame offsets.")] = True,
     # density / sampling
     n_time: Annotated[int, typer.Option("--n-time", help="Temporal samples (dominant quality lever).")] = 300,
     n_keyframes: Annotated[int, typer.Option("--n-keyframes", help="MASt3R calib keyframes per moving cam.")] = 18,
@@ -703,6 +705,7 @@ def casual(
     backend = get_backend_dir(); mast3r = get_mast3r_dir()
     cfg = configs or str(backend / "arguments" / "hypernerf" / "default.py")
     mcams = tuple(int(x) for x in moving_cams.split(",") if x.strip() != "")
+    hcams = tuple(int(x) for x in holdout_cams.split(",") if x.strip() != "")
     seg = None if seg_end <= 0 else (seg_start, seg_end)
     try:
         import imageio_ffmpeg; ff = imageio_ffmpeg.get_ffmpeg_exe()
@@ -730,6 +733,7 @@ def casual(
                 mask_downweight=mask_downweight, mask_dilate=mask_dilate, mask_score=mask_score,
                 init_conf_thr=init_conf_thr, max_init_pts=max_init_pts,
                 static_calib_frames=static_calib_frames, edge_thr_modular=edge_thr_modular,
+                holdout_cams=hcams, audio_sync=audio_sync,
             )
         if not skip_train:
             train_nerfies(out_dir, out_dir / "model", backend, configs=cfg,

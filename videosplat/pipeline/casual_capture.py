@@ -97,6 +97,7 @@ def build_casual_nerfies_dataset(
     mask_person: bool = True, mask_downweight: float = 1.0, mask_dilate: int = 9,
     mask_score: float = 0.7, init_conf_thr: float = 1.5, max_init_pts: int = 100_000,
     static_calib_frames: int = 3, edge_thr_modular: int = 24,
+    holdout_cams: tuple[int, ...] = (), audio_sync: bool = True,
 ) -> dict:
     """Write a 4DGaussians nerfies dataset from casual multi-cam videos. Every
     knob is a parameter (the CLI `videosplat casual` exposes them all).
@@ -138,8 +139,12 @@ def build_casual_nerfies_dataset(
     cal = out_dir / "_cal"; cal.mkdir(exist_ok=True)
 
     console.print(f"  [dim]casual: {ncam} cams, moving={moving_cams or 'none'}, {n_time} timesteps[/]")
-    offs = audio_sync_offsets(vids, ffmpeg)
-    console.print(f"  [dim]audio sync offsets (s): {[round(o,2) for o in offs]}[/]")
+    if audio_sync:
+        offs = audio_sync_offsets(vids, ffmpeg)
+        console.print(f"  [dim]audio sync offsets (s): {[round(o,2) for o in offs]}[/]")
+    else:
+        offs = [0.0] * ncam
+        console.print("  [dim]audio sync DISABLED (hardware-synced rig) → offsets=0[/]")
     durs = []
     for v in vids:
         c = cv2.VideoCapture(str(v)); durs.append(c.get(cv2.CAP_PROP_FRAME_COUNT) / fps); c.release()
@@ -244,7 +249,13 @@ def build_casual_nerfies_dataset(
             json.dump(camjson(Rw2c, C, f), open(out_dir / "camera" / f"{iid}.json", "w"))
             ids.append(iid); meta[iid] = {"camera_id": ci, "warp_id": ti, "appearance_id": ci, "time_id": ti}
 
-    val = [i for i in ids if int(i.split("t")[1]) % 10 == 9]
+    # Eval split. Default = held-out-TIME (every 10th timestep). If holdout_cams
+    # is given, hold out those entire CAMERAS instead → the 4DGS eval becomes a
+    # true held-out-VIEW (novel-view) PSNR rather than novel-time.
+    if holdout_cams:
+        val = [i for i in ids if meta[i]["camera_id"] in holdout_cams]
+    else:
+        val = [i for i in ids if int(i.split("t")[1]) % 10 == 9]
     json.dump(meta, open(out_dir / "metadata.json", "w"))
     json.dump({"ids": ids, "train_ids": [i for i in ids if i not in val], "val_ids": val}, open(out_dir / "dataset.json", "w"))
     json.dump({"near": 0.1, "far": 3.0, "scale": 1.0, "center": [0., 0., 0.]}, open(out_dir / "scene.json", "w"))
