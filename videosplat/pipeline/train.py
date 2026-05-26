@@ -145,10 +145,13 @@ def render_keyframes(
     iterations: int,
     python_exe: str,
     env: dict,
+    configs: str | None = None,
 ) -> list[Path]:
     """
     Run bake_4dgs_keyframes.py as a subprocess with 4DGaussians on PYTHONPATH.
     Generates N PLY files in standard 3DGS format with full SH3 colour.
+    `configs`: 4DGaussians config the model was trained with (required for the
+    casual/nerfies path so the baked deformation-net architecture matches).
     """
     keyframes_dir = model_path / "keyframes"
     keyframes_dir.mkdir(parents=True, exist_ok=True)
@@ -163,6 +166,8 @@ def render_keyframes(
         "--output_dir",  str(keyframes_dir.resolve()),
         "--iteration",   str(iterations),
     ]
+    if configs:
+        cmd += ["--configs", str(configs)]
 
     result = subprocess.run(cmd, env=env, cwd=str(backend_dir))
     if result.returncode != 0:
@@ -174,6 +179,64 @@ def render_keyframes(
     paths = sorted(keyframes_dir.glob("keyframe_*.ply"))
     console.print(f"  [green]{len(paths)} keyframe PLYs → {keyframes_dir}[/]")
     return paths
+
+
+def train_nerfies(
+    source_path: Path,      # nerfies dataset dir (dataset.json + camera/ + rgb/2x + points3D_downsample2.ply)
+    model_path: Path,
+    backend_dir: Path,      # 4DGaussians root
+    *,
+    configs: str,           # e.g. <backend>/arguments/hypernerf/default.py
+    iterations: int = 14_000,
+    n_keyframes: int = 100,
+    train_python: str | None = None,
+    extra_args: list[str] | None = None,
+) -> Path:
+    """Train 4DGaussians in nerfies/HyperNeRF mode (casual moving/heterogeneous
+    cams), then bake keyframes. Auto-detected as nerfies via dataset.json (and the
+    absence of a COLMAP sparse/). Requires the mmengine+mmcv shim for --configs."""
+    train_script = backend_dir / "train.py"
+    if not train_script.exists():
+        raise FileNotFoundError(f"4DGaussians/train.py not found at {train_script}.")
+    model_path.mkdir(parents=True, exist_ok=True)
+    python_exe = train_python or sys.executable
+    # 4DGaussians' --configs OVERRIDES CLI args, so a plain --iterations is ignored.
+    # Materialise an effective config that inherits the chosen one but honours the
+    # requested iteration count (so --iterations actually takes effect).
+    eff_cfg = configs
+    try:
+        from mmengine import Config
+        c = Config.fromfile(str(configs))
+        op = dict(c.get("OptimizationParams", {}))
+        op["iterations"] = int(iterations)
+        op["coarse_iterations"] = min(int(op.get("coarse_iterations", 3000)), max(500, int(iterations) // 4))
+        c.OptimizationParams = op
+        eff_cfg = str(model_path / "_effective_config.py")
+        c.dump(eff_cfg)
+    except Exception as e:
+        console.print(f"  [yellow]could not override iterations in config ({e}); using {Path(configs).name} as-is[/]")
+    cmd = [
+        python_exe, str(train_script),
+        "--source_path", str(source_path.resolve()),
+        "--model_path",  str(model_path.resolve()),
+        "--configs",     str(eff_cfg),
+        "--iterations",  str(iterations),
+        "--save_iterations", str(iterations),
+        "--expname", source_path.name,
+    ]
+    if extra_args:
+        cmd.extend(extra_args)
+    env = _build_env(backend_dir, downsample=1)   # nerfies ignores DYNERF_DOWNSAMPLE
+    console.print(f"  [dim]Training 4DGaussians (nerfies): {iterations:,} iters, configs={Path(configs).name}[/]")
+    t0 = time.time()
+    if subprocess.run(cmd, env=env, cwd=str(backend_dir)).returncode != 0:
+        raise RuntimeError("4DGaussians nerfies training failed — check output above.")
+    console.print(f"  [green]Training complete in {(time.time()-t0)/60:.1f} min[/]")
+    console.print(f"  Baking {n_keyframes} keyframe snapshots…")
+    render_keyframes(model_path=model_path, backend_dir=backend_dir, source_path=source_path,
+                     n_keyframes=n_keyframes, iterations=iterations, python_exe=python_exe,
+                     env=env, configs=configs)
+    return model_path
 
 
 # ── Init point cloud ─────────────────────────────────────────────────────────────

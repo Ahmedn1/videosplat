@@ -102,6 +102,10 @@ def main():
     parser.add_argument("--n_keyframes", type=int, default=24)
     parser.add_argument("--output_dir",  required=True)
     parser.add_argument("--iteration",   type=int, default=-1)
+    parser.add_argument("--configs",     type=str, default="",
+                        help="4DGaussians config (e.g. arguments/hypernerf/default.py). "
+                             "REQUIRED if the model was trained with one — the deformation "
+                             "net architecture (net_width/grid) must match or load_model fails.")
     args = parser.parse_args()
 
     model_path  = Path(args.model_path)
@@ -131,6 +135,12 @@ def main():
     _parser = ArgumentParser()
     hp_obj  = ModelHiddenParams(_parser)
     hp_defaults = _parser.parse_args([])  # all defaults, no extra flags
+    # If the model was trained with a --configs file (e.g. hypernerf for the
+    # casual/nerfies path), merge it so the deformation-net architecture matches.
+    if args.configs:
+        import mmcv
+        from utils.params_utils import merge_hparams
+        hp_defaults = merge_hparams(hp_defaults, mmcv.Config.fromfile(args.configs))
 
     from scene.gaussian_model import GaussianModel
     gaussians = GaussianModel(3, hp_defaults)

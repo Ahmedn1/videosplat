@@ -584,6 +584,8 @@ def render_path_cmd(
     video_out: Annotated[Optional[Path], typer.Option("--save-file", "--output", "-o")] = None,
     forward_shift: Annotated[float, typer.Option("--forward-shift",
         help="Shift camera forward by this many world units (compensates viewer/renderer FOV mismatch).")] = 0.0,
+    configs: Annotated[Optional[str], typer.Option("--configs",
+        help="4DGaussians config the model was trained with — REQUIRED for casual/nerfies models (e.g. arguments/hypernerf/default.py).")] = None,
     train_python: Annotated[Optional[str], typer.Option("--train-python")] = None,
 ) -> None:
     """Render a video along a camera path exported from the path editor."""
@@ -630,6 +632,8 @@ def render_path_cmd(
     ]
     if iterations != -1:
         cmd += ["--iteration", str(iterations)]
+    if configs:
+        cmd += ["--configs", str(configs)]
     if white_bg:
         cmd.append("--white_bg")
     if forward_shift != 0.0:
@@ -645,6 +649,96 @@ def render_path_cmd(
         raise typer.Exit(1)
 
     console.print(f"[green]Video saved → {out_mp4}[/]")
+
+
+# ── casual (moving / heterogeneous / unsynced multi-cam → nerfies 4DGS) ─────────
+
+@app.command()
+def casual(
+    source: Annotated[Path, typer.Argument(help="Dir of camN.mp4 casual captures (moving/heterogeneous/unsynced).")],
+    output: Annotated[Optional[Path], typer.Option("--output", "-o")] = None,
+    name: Annotated[str, typer.Option("--name", "-n", help="Scene label")] = "",
+    moving_cams: Annotated[str, typer.Option("--moving-cams", help="Comma-sep indices of cameras that MOVE, e.g. '2' or '0,2'. Empty = all static.")] = "",
+    # density / sampling
+    n_time: Annotated[int, typer.Option("--n-time", help="Temporal samples (dominant quality lever).")] = 300,
+    n_keyframes: Annotated[int, typer.Option("--n-keyframes", help="MASt3R calib keyframes per moving cam.")] = 18,
+    static_calib_frames: Annotated[int, typer.Option("--static-calib-frames")] = 3,
+    seg_start: Annotated[float, typer.Option("--seg-start", help="Clip window start (s, cam0 clock).")] = 3.0,
+    seg_end: Annotated[float, typer.Option("--seg-end", help="Clip window end (s); <=0 = full overlap.")] = -1.0,
+    width: Annotated[int, typer.Option("--width")] = 1024,
+    height: Annotated[int, typer.Option("--height")] = 576,
+    fps: Annotated[float, typer.Option("--fps")] = 30.0,
+    # calibration
+    mast3r_size: Annotated[int, typer.Option("--mast3r-size", help="MASt3R res (↓=less VRAM, worse calib).")] = 512,
+    mast3r_niter: Annotated[int, typer.Option("--mast3r-niter")] = 400,
+    edge_thr_modular: Annotated[int, typer.Option("--modular-above", help="Use lower-VRAM Modular optimizer above this image count.")] = 24,
+    # person conf-downweighting
+    mask_person: Annotated[bool, typer.Option("--mask-person/--no-mask-person", help="Downweight the moving subject in the pose solve.")] = True,
+    mask_downweight: Annotated[float, typer.Option("--mask-downweight", help="Downweight strength 0..1 (1=fully ignore person's pixels).")] = 1.0,
+    mask_dilate: Annotated[int, typer.Option("--mask-dilate")] = 9,
+    mask_score: Annotated[float, typer.Option("--mask-score", help="Person-detector score threshold.")] = 0.7,
+    # init cloud + training
+    init_conf_thr: Annotated[float, typer.Option("--init-conf-thr")] = 1.5,
+    max_init_pts: Annotated[int, typer.Option("--max-init-pts")] = 100_000,
+    iterations: Annotated[int, typer.Option("--iterations")] = 14_000,
+    bake_keyframes: Annotated[int, typer.Option("--keyframes", help="Keyframes to bake for the viewer.")] = 100,
+    configs: Annotated[Optional[str], typer.Option("--configs", help="4DGaussians config (default: backend hypernerf/default.py).")] = None,
+    # safety
+    vram_guard: Annotated[int, typer.Option("--vram-guard", help="Kill the run if total GPU VRAM exceeds this many MiB (0=off). Protects a display-shared GPU.")] = 12000,
+    skip_build: Annotated[bool, typer.Option("--skip-build", help="Reuse existing nerfies dataset in output/.")] = False,
+    skip_train: Annotated[bool, typer.Option("--skip-train")] = False,
+) -> None:
+    """Casual multi-camera → 4DGaussians (nerfies). Handles MOVING + heterogeneous
+    + unsynced cameras that the dynerf `run` path cannot. Every knob is a flag."""
+    import os
+    from videosplat.config import get_backend_dir, get_mast3r_dir
+    from videosplat.pipeline.casual_capture import build_casual_nerfies_dataset, export_casual_viewer
+    from videosplat.pipeline.train import train_nerfies
+
+    out_dir = (output or Path("outputs") / f"{source.name}_casual").resolve()
+    backend = get_backend_dir(); mast3r = get_mast3r_dir()
+    cfg = configs or str(backend / "arguments" / "hypernerf" / "default.py")
+    mcams = tuple(int(x) for x in moving_cams.split(",") if x.strip() != "")
+    seg = None if seg_end <= 0 else (seg_start, seg_end)
+    try:
+        import imageio_ffmpeg; ff = imageio_ffmpeg.get_ffmpeg_exe()
+    except ImportError:
+        ff = shutil.which("ffmpeg") or "ffmpeg"
+
+    # self-protect the shared display-GPU: own process group + VRAM guardian
+    guard = None
+    if vram_guard > 0:
+        try: os.setpgrp()
+        except OSError: pass
+        gscript = Path(__file__).parent / ".." / ".." / ".lab" / "bin" / "vram_guard"
+        gscript = gscript if gscript.exists() else (Path(__file__).parent / "vram_guard")
+        if Path(gscript).exists():
+            guard = subprocess.Popen(["bash", str(gscript), str(os.getpgid(0)), str(vram_guard)],
+                                     start_new_session=True)
+            console.print(f"  [dim]VRAM guardian active (kill > {vram_guard} MiB)[/]")
+    try:
+        console.rule(f"[bold]Casual capture → nerfies 4DGS  ({source.name})")
+        if not skip_build:
+            build_casual_nerfies_dataset(
+                source, out_dir, ffmpeg=ff, mast3r_dir=mast3r, moving_cams=mcams,
+                n_time=n_time, n_keyframes=n_keyframes, seg=seg, W=width, H=height, fps=fps,
+                mast3r_size=mast3r_size, mast3r_niter=mast3r_niter, mask_person=mask_person,
+                mask_downweight=mask_downweight, mask_dilate=mask_dilate, mask_score=mask_score,
+                init_conf_thr=init_conf_thr, max_init_pts=max_init_pts,
+                static_calib_frames=static_calib_frames, edge_thr_modular=edge_thr_modular,
+            )
+        if not skip_train:
+            train_nerfies(out_dir, out_dir / "model", backend, configs=cfg,
+                          iterations=iterations, n_keyframes=bake_keyframes,
+                          train_python=sys.executable)
+            export_casual_viewer(out_dir, label=(name or source.name))
+        console.print(Panel(
+            f"Done!  nerfies model + viewer → {out_dir}\n\n"
+            f"Render a fly-through:  videosplat render-path {out_dir} --configs {cfg} --frames {int(107*fps)} --fps {int(fps)}\n"
+            f"Open the viewer:       videosplat view {out_dir}",
+            title="[bold cyan]VideoSplat casual[/]", border_style="green"))
+    finally:
+        if guard: guard.terminate()
 
 
 # ── view ───────────────────────────────────────────────────────────────────────

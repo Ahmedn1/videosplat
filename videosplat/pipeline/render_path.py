@@ -145,6 +145,10 @@ def main():
     parser.add_argument("--forward_shift", type=float, default=0.0,
                         help="Shift camera forward by this many world units along its look direction.")
     parser.add_argument("--ffmpeg",       default="")
+    parser.add_argument("--configs",      type=str, default="",
+                        help="4DGaussians config the model was trained with "
+                             "(e.g. arguments/hypernerf/default.py) — required for "
+                             "casual/nerfies models so the deformation net matches.")
     args = parser.parse_args()
 
     model_path  = Path(args.model_path)
@@ -186,6 +190,12 @@ def main():
     ModelHiddenParams(_p)
     PipelineParams(_p)
     hp = _p.parse_args([])
+    # Match the trained deformation-net architecture if a config was used
+    # (required for the casual/nerfies path trained with hypernerf config).
+    if getattr(args, "configs", ""):
+        import mmcv
+        from utils.params_utils import merge_hparams
+        hp = merge_hparams(hp, mmcv.Config.fromfile(args.configs))
 
     from scene.gaussian_model import GaussianModel
     gaussians = GaussianModel(3, hp)

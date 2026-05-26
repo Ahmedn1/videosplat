@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+# VRAM guardian: protect the desktop session on this shared display-GPU.
+# Usage: vram_guard <pgid> [threshold_mib]
+# Polls total GPU VRAM; if it exceeds threshold, kills the target process GROUP
+# (my compute job) so the display server never gets starved -> no session crash.
+PGID="$1"; THR="${2:-12000}"
+echo "[vram_guard] watching pgid=$PGID, kill if total VRAM > ${THR}MiB"
+hi=0
+while kill -0 -"$PGID" 2>/dev/null; do
+  used=$(nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits 2>/dev/null | head -1 | tr -d '[:space:]')
+  [ -z "$used" ] && { sleep 2; continue; }
+  [ "$used" -gt "$hi" ] && hi="$used"
+  if [ "$used" -gt "$THR" ]; then
+    echo "[vram_guard] TRIPPED: used=${used}MiB > ${THR}MiB — killing pgid $PGID to protect display"
+    kill -9 -"$PGID" 2>/dev/null
+    echo "[vram_guard] killed. peak seen=${hi}MiB"
+    exit 9
+  fi
+  sleep 2
+done
+echo "[vram_guard] target exited cleanly. peak VRAM seen=${hi}MiB"
