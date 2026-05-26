@@ -224,6 +224,18 @@ def train_nerfies(
         op = dict(c.get("OptimizationParams", {}))
         op["iterations"] = int(iterations)
         op["coarse_iterations"] = min(int(op.get("coarse_iterations", 3000)), max(500, int(iterations) // 4))
+        # NOTE: HyperNeRF's default config DISABLES opacity reset (interval=300000 =
+        # "never" within a normal run). That's tuned for dense object-centric capture,
+        # but on sparse / textureless scenes it lets floaters accumulate and causes a
+        # NOVEL-VIEW COLLAPSE — the model satisfies the training cameras with floater
+        # Gaussians that explode from held-out angles (AIST breakdance: held-out-VIEW
+        # PSNR 15.1 -> 16.1 just by re-enabling reset). So restore the standard 3DGS
+        # value (3000) whenever the config has it effectively disabled. Any explicit
+        # --opt-override opacity_reset_interval=... still wins (applied just below).
+        if int(op.get("opacity_reset_interval", 3000)) >= 100000:
+            op["opacity_reset_interval"] = 3000
+            console.print("  [dim]opacity_reset_interval: config had it disabled → default 3000 "
+                          "(anti-floater; override with --opt-override).[/]")
         if opt_overrides:
             op.update(opt_overrides)
             console.print(f"  [dim]OptimizationParams overrides: {opt_overrides}[/]")

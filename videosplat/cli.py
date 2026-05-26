@@ -689,7 +689,7 @@ def casual(
     prune_scale_mult: Annotated[float, typer.Option("--prune-scale-mult", help="Cull Gaussians with max-scale > mult×p99 (0=off).")] = 5.0,
     prune_dist_mult: Annotated[float, typer.Option("--prune-dist-mult", help="Cull Gaussians > mult×p90-radius from center (0=off).")] = 3.0,
     configs: Annotated[Optional[str], typer.Option("--configs", help="4DGaussians config (default: backend hypernerf/default.py).")] = None,
-    opt_override: Annotated[list[str], typer.Option("--opt-override", help="Override any OptimizationParams knob, repeatable, key=val (e.g. --opt-override opacity_reset_interval=3000 --opt-override lambda_dssim=0.2).")] = [],
+    opt_override: Annotated[list[str], typer.Option("--opt-override", help="Override any OptimizationParams knob, repeatable, key=val (e.g. --opt-override lambda_dssim=0.2). NOTE: opacity_reset_interval already defaults to 3000 here (HyperNeRF disables it → novel-view floater collapse on sparse/textureless scenes); pass it explicitly to change.")] = [],
     # safety
     vram_guard: Annotated[int, typer.Option("--vram-guard", help="Kill the run if total GPU VRAM exceeds this many MiB (0=off). Protects a display-shared GPU.")] = 12000,
     skip_build: Annotated[bool, typer.Option("--skip-build", help="Reuse existing nerfies dataset in output/.")] = False,
