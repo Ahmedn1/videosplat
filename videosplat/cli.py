@@ -689,6 +689,7 @@ def casual(
     prune_scale_mult: Annotated[float, typer.Option("--prune-scale-mult", help="Cull Gaussians with max-scale > mult×p99 (0=off).")] = 5.0,
     prune_dist_mult: Annotated[float, typer.Option("--prune-dist-mult", help="Cull Gaussians > mult×p90-radius from center (0=off).")] = 3.0,
     configs: Annotated[Optional[str], typer.Option("--configs", help="4DGaussians config (default: backend hypernerf/default.py).")] = None,
+    opt_override: Annotated[list[str], typer.Option("--opt-override", help="Override any OptimizationParams knob, repeatable, key=val (e.g. --opt-override opacity_reset_interval=3000 --opt-override lambda_dssim=0.2).")] = [],
     # safety
     vram_guard: Annotated[int, typer.Option("--vram-guard", help="Kill the run if total GPU VRAM exceeds this many MiB (0=off). Protects a display-shared GPU.")] = 12000,
     skip_build: Annotated[bool, typer.Option("--skip-build", help="Reuse existing nerfies dataset in output/.")] = False,
@@ -706,6 +707,12 @@ def casual(
     cfg = configs or str(backend / "arguments" / "hypernerf" / "default.py")
     mcams = tuple(int(x) for x in moving_cams.split(",") if x.strip() != "")
     hcams = tuple(int(x) for x in holdout_cams.split(",") if x.strip() != "")
+    def _coerce(v: str):
+        try: return int(v)
+        except ValueError:
+            try: return float(v)
+            except ValueError: return v
+    opt_ovr = {k.strip(): _coerce(v.strip()) for k, v in (o.split("=", 1) for o in opt_override)}
     seg = None if seg_end <= 0 else (seg_start, seg_end)
     try:
         import imageio_ffmpeg; ff = imageio_ffmpeg.get_ffmpeg_exe()
@@ -739,7 +746,8 @@ def casual(
             train_nerfies(out_dir, out_dir / "model", backend, configs=cfg,
                           iterations=iterations, n_keyframes=bake_keyframes,
                           train_python=sys.executable, prune_opacity=prune_opacity,
-                          prune_scale_mult=prune_scale_mult, prune_dist_mult=prune_dist_mult)
+                          prune_scale_mult=prune_scale_mult, prune_dist_mult=prune_dist_mult,
+                          opt_overrides=opt_ovr)
             export_casual_viewer(out_dir, label=(name or source.name))
         console.print(Panel(
             f"Done!  nerfies model + viewer → {out_dir}\n\n"

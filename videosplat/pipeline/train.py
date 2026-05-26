@@ -200,10 +200,15 @@ def train_nerfies(
     prune_opacity: float = 0.05,
     prune_scale_mult: float = 5.0,
     prune_dist_mult: float = 3.0,
+    opt_overrides: dict | None = None,
 ) -> Path:
     """Train 4DGaussians in nerfies/HyperNeRF mode (casual moving/heterogeneous
     cams), then bake keyframes. Auto-detected as nerfies via dataset.json (and the
-    absence of a COLMAP sparse/). Requires the mmengine+mmcv shim for --configs."""
+    absence of a COLMAP sparse/). Requires the mmengine+mmcv shim for --configs.
+
+    opt_overrides: dict merged into the config's OptimizationParams (e.g.
+    {"opacity_reset_interval": 3000, "lambda_dssim": 0.2}) — re-enable anti-floater
+    regularisation that HyperNeRF's default disables for object-centric scenes."""
     train_script = backend_dir / "train.py"
     if not train_script.exists():
         raise FileNotFoundError(f"4DGaussians/train.py not found at {train_script}.")
@@ -219,6 +224,9 @@ def train_nerfies(
         op = dict(c.get("OptimizationParams", {}))
         op["iterations"] = int(iterations)
         op["coarse_iterations"] = min(int(op.get("coarse_iterations", 3000)), max(500, int(iterations) // 4))
+        if opt_overrides:
+            op.update(opt_overrides)
+            console.print(f"  [dim]OptimizationParams overrides: {opt_overrides}[/]")
         c.OptimizationParams = op
         eff_cfg = str(model_path / "_effective_config.py")
         c.dump(eff_cfg)
