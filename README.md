@@ -39,6 +39,24 @@ timeline player (every keyframe, view-dependent colour) runs locally via
 
 ---
 
+## Datasets
+
+The five reconstructions in the [demo](https://videosplat-demo.netlify.app) and
+[Findings.md](Findings.md) come from these public multi-view datasets (plus one of
+our own casual captures). Full academic citations are in
+[Findings.md → References](Findings.md#references).
+
+| Dataset | Scenes used here | Source |
+|---|---|---|
+| **Neural 3D Video** (Plenoptic / DyNeRF) | `coffee_martini`, `flame_steak` | [facebookresearch/Neural_3D_Video](https://github.com/facebookresearch/Neural_3D_Video) |
+| **Dynamic 3D Gaussians** (CMU Panoptic Studio captures) | `basketball` | [repo](https://github.com/JonathonLuiten/Dynamic3DGaussians) · [data.zip](https://omnomnom.vision.rwth-aachen.de/data/Dynamic3DGaussians/data.zip) |
+| **AIST Dance Video Database** (+ [AIST++](https://google.github.io/aistplusplus_dataset/) calibration) | `breakdance` | [aistdancedb.ongaaccel.jp](https://aistdancedb.ongaaccel.jp/) |
+| Own casual capture (3 phones, unsynced) | `piano` | self-recorded |
+
+Each dataset is under its own license/terms — see the source links before redistributing.
+
+---
+
 ## Prerequisites
 
 | Requirement | Notes |

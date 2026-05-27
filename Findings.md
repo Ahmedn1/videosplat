@@ -18,8 +18,9 @@ very different things and conflating them was itself one of the lessons.
 
 ## 1. Basketball — Dynamic3DGaussians benchmark (Phase 0)
 
-**Capture.** The Dynamic3DGaussians multi-camera benchmark (a synchronized rig around
-a basketball/juggling performer), with calibration shipped in the dataset.
+**Capture.** The [Dynamic 3D Gaussians][d3dg] multi-camera benchmark (a synchronized
+rig around a basketball/juggling performer, from CMU Panoptic Studio captures), with
+calibration shipped in the dataset. [[data.zip][d3dg-data]]
 
 **Why.** Validation before any custom capture: prove sync → calibrate → convert →
 train → bake → viewer runs end-to-end on a known-good multi-view dynamic scene. Used
@@ -33,8 +34,8 @@ calibration refinement (below).
 
 ## 2. Coffee Martini — N3V, the quality bring-up (best held-out-view 28.08)
 
-**Capture.** Neural-3D-Video plenoptic kitchen, 18 synchronized GoPros, hard lighting
-(glare, windows). COLMAP calibration → 4DGaussians dynerf path. Held-out view = cam0.
+**Capture.** [Neural 3D Video][n3v] plenoptic kitchen, 18 synchronized GoPros, hard
+lighting (glare, windows). COLMAP calibration → 4DGaussians dynerf path. Held-out view = cam0.
 
 **The climb (test PSNR 13 → 28.08 @14k):**
 
@@ -65,8 +66,8 @@ calibration refinement (below).
 
 ## 3. Flame Steak — N3V via SpacetimeGaussians (the fast path)
 
-**Capture.** Another N3V kitchen scene. Reconstructed with the **SpacetimeGaussians**
-backbone (`--algo stg`).
+**Capture.** Another [Neural 3D Video][n3v] kitchen scene. Reconstructed with the
+**SpacetimeGaussians** backbone (`--algo stg`).
 
 **Finding.** STG calibrates with ~50 small **per-frame** COLMAPs (~1h total) versus the
 single 24h exhaustive COLMAP that the 4dgs path needs on N3V. Since calibration accuracy
@@ -121,8 +122,10 @@ second half. Different start times and lengths. No ground truth. This is what
 
 ## 5. AIST Breakdance — 9-camera synced ring (held-out-view 15.13 → 16.50)
 
-**Capture.** A breakdancer in a white cyclorama, 9 hardware-synced 1080p cameras in a
-360° ring. The first dataset with enough surround coverage to do a proper **held-out-VIEW**
+**Capture.** From the [AIST Dance Video Database][aist] (`breakdance_ch01`): a
+breakdancer in a white cyclorama, 9 hardware-synced 1080p cameras in a 360° ring
+([AIST++][aistpp] provides the camera calibration). The first dataset with enough
+surround coverage to do a proper **held-out-VIEW**
 eval: hold out 2 of 9 cameras, train on 7, measure PSNR on the novel views.
 
 **The climb (held-out-VIEW PSNR @14k):**
@@ -182,3 +185,46 @@ eval: hold out 2 of 9 cameras, train on 7, measure PSNR on the novel views.
 - **VRAM is a hard constraint on a shared GPU.** MASt3R complete-graph OOMs above ~22
   images on 16 GB; heavy training spikes can crash the desktop session. Keep calibration
   sets small and run under the VRAM guardian.
+
+---
+
+## References
+
+**Datasets**
+
+- **Neural 3D Video (Plenoptic / DyNeRF)** — `coffee_martini`, `flame_steak`.
+  Li, Slavcheva, Zollhöfer, Green, Lassner, Kim, Schmidt, Lovegrove, Goesele, Newcombe, Lv.
+  *Neural 3D Video Synthesis from Multi-view Video.* CVPR 2022.
+  [github.com/facebookresearch/Neural_3D_Video][n3v]
+- **Dynamic 3D Gaussians** — `basketball` (multi-view captures from CMU Panoptic Studio).
+  Luiten, Kopanas, Leibe, Ramanan. *Dynamic 3D Gaussians: Tracking by Persistent Dynamic
+  View Synthesis.* 3DV 2024. [code][d3dg] · [data][d3dg-data]
+- **AIST Dance Video Database** — `breakdance_ch01`.
+  Tsuchida, Fukayama, Hamasaki, Goto. *AIST Dance Video Database: Multi-genre,
+  Multi-dancer, and Multi-camera Database for Dance Information Processing.* ISMIR 2019.
+  [aistdancedb.ongaaccel.jp][aist]. Camera calibration via **AIST++**: Li, Yang, Ross,
+  Kanazawa. *AI Choreographer: Music Conditioned 3D Dance Generation with AIST++.*
+  ICCV 2021. [AIST++][aistpp]
+- **Piano** — our own casual capture (3 unsynced phones); not a public dataset.
+
+**Backbones & tools**
+
+- **3D Gaussian Splatting** — Kerbl, Kopanas, Leimkühler, Drettakis. *3D Gaussian
+  Splatting for Real-Time Radiance Field Rendering.* SIGGRAPH 2023. (© Inria / GRAPHDECO)
+- **4DGaussians** — Wu et al. *4D Gaussian Splatting for Real-Time Dynamic Scene
+  Rendering.* CVPR 2024. [github.com/hustvl/4DGaussians](https://github.com/hustvl/4DGaussians)
+- **SpacetimeGaussians** — Li et al. *Spacetime Gaussian Feature Splatting for Real-Time
+  Dynamic View Synthesis.* CVPR 2024. [github.com/oppo-us-research/SpacetimeGaussians](https://github.com/oppo-us-research/SpacetimeGaussians)
+- **Gaussian-Flow** — Lin et al. *Gaussian-Flow: 4D Reconstruction with Dynamic 3D
+  Gaussian Particle.* CVPR 2024. [github.com/Linyou/Gaussian-Flow](https://github.com/Linyou/Gaussian-Flow)
+- **4D-Rotor-Gaussians** — Duan et al. *4D-Rotor Gaussian Splatting.* SIGGRAPH 2024.
+  [github.com/weify627/4D-Rotor-Gaussians](https://github.com/weify627/4D-Rotor-Gaussians)
+- **MASt3R** — Leroy, Cabon, Revaud. *Grounding Image Matching in 3D with MASt3R.*
+  ECCV 2024. [github.com/naver/mast3r](https://github.com/naver/mast3r)
+- **Browser viewer** — [@mkkellogg/gaussian-splats-3d](https://github.com/mkkellogg/GaussianSplats3D)
+
+[n3v]: https://github.com/facebookresearch/Neural_3D_Video
+[d3dg]: https://github.com/JonathonLuiten/Dynamic3DGaussians
+[d3dg-data]: https://omnomnom.vision.rwth-aachen.de/data/Dynamic3DGaussians/data.zip
+[aist]: https://aistdancedb.ongaaccel.jp/
+[aistpp]: https://google.github.io/aistplusplus_dataset/
