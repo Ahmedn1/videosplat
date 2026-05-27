@@ -6,6 +6,9 @@ generalise. Metrics are PSNR; note carefully whether a number is **held-out-time
 (novel moment, seen viewpoint) or **held-out-view** (novel viewpoint) — they measure
 very different things and conflating them was itself one of the lessons.
 
+> **Interactive version:** [videosplat_experiments.ipynb](videosplat_experiments.ipynb)
+> walks through every experiment with rendered images and PSNR charts.
+
 | Dataset | Capture | Method | Best PSNR | Headline finding |
 |---|---|---|---|---|
 | Basketball | 12-cam synced benchmark | STG / 4DGS (pre-calib) | — (validation) | Phase-0 proof the pipeline works end-to-end |

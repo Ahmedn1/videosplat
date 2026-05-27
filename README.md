@@ -11,6 +11,7 @@ videosplat run data/n3v/coffee_martini --algo 4dgs --name "Coffee Martini"
 ```
 
 [![Live Demo](https://img.shields.io/badge/🔗_Live_Demo-Netlify-blue)](https://videosplat-demo.netlify.app)
+[![Kaggle Notebook](https://img.shields.io/badge/📓_Notebook-Kaggle-20BEFF)](https://www.kaggle.com/code/ahmedn1/videosplat-experiments)
 
 The live demo is a gallery of five reconstructions — each with a rendered fly-through
 video **and** a single-frame interactive splat you can orbit in-browser. The full 4D
@@ -19,6 +20,10 @@ timeline player (every keyframe, view-dependent colour) runs locally via
 
 > Read **[Findings.md](Findings.md)** for the experimental write-up across all five datasets
 > (what worked, what didn't, and why).
+>
+> Explore **[videosplat_experiments.ipynb](videosplat_experiments.ipynb)** for an
+> interactive visual walkthrough of every experiment — PSNR charts, rendered frames,
+> and the key findings across all five datasets.
 
 ---
 
