@@ -92,6 +92,10 @@ def main():
 
         manifest.append(entry)
 
+    # gallery display order (best/strongest scenes first)
+    order = ["basketball", "flame_steak", "piano", "aist", "coffee_martini"]
+    manifest.sort(key=lambda e: order.index(e["id"]) if e["id"] in order else 99)
+
     (DOCS / "scenes.json").write_text(json.dumps(manifest, indent=2))
     total = sum(f.stat().st_size for f in DOCS.rglob("*") if f.is_file()) / 1e6
     print(f"\ndocs/scenes.json written ({len(manifest)} scenes). docs total ≈ {total:.0f} MB")
