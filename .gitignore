@@ -6,9 +6,18 @@ data/
 outputs/
 .venv/
 
-# Researcher skill (untracked source of truth)
+# Researcher skill (untracked source of truth) + its archived backups
 .lab/
+.lab.bak*/
 run.log
+output.png
+
+# Big binaries anywhere — EXCEPT the committed demo assets under docs/
+*.ply
+*.mp4
+*.splat
+*.ksplat
+!docs/**
 
 # Stray generated frames dumped at cwd by the 4DGaussians dynerf reader
 /images/

@@ -1,0 +1,121 @@
+[
+  {
+    "id": "piano",
+    "title": "Piano \u2014 3-camera casual capture",
+    "metric": "held-out-time PSNR 28.0 \u00b7 MASt3R + nerfies",
+    "blurb": "Three unsynced phones (one top-down), reconstructed via audio-sync \u2192 MASt3R \u2192 nerfies 4DGS. Free-viewpoint of a piano performance from a casual capture.",
+    "splat": "scenes/piano/scene.splat",
+    "video": "scenes/piano/walkthrough_audio.mp4",
+    "video_label": "Walkthrough + audio",
+    "center": [
+      -0.4045,
+      0.1011,
+      0.4076
+    ],
+    "radius": 0.4358,
+    "cam_pos": [
+      -0.28786095741951273,
+      -0.1442364761854012,
+      0.041668158072998056
+    ],
+    "cam_lookat": [
+      -0.43068246308529184,
+      0.3075048913931053,
+      0.6029327922053833
+    ]
+  },
+  {
+    "id": "aist",
+    "title": "AIST Breakdance \u2014 9-camera synced ring",
+    "metric": "held-out-VIEW PSNR 15.13\u219216.50 \u00b7 MASt3R + nerfies",
+    "blurb": "A dancer in a white cyclorama, 9 synced cameras in a 360\u00b0 ring. Novel-view eval (hold out 2 of 9 cams); restoring opacity-reset fixed a floater collapse.",
+    "splat": "scenes/aist/scene.splat",
+    "video": "scenes/aist/orbit.mp4",
+    "video_label": "360\u00b0 orbit",
+    "center": [
+      0.1244,
+      -0.1166,
+      0.3311
+    ],
+    "radius": 1.4474,
+    "cam_pos": [
+      -0.007600137498229742,
+      -0.029569076374173164,
+      -0.9643813371658325
+    ],
+    "cam_lookat": [
+      -0.015061927028000355,
+      -0.034238402266055346,
+      0.03557997941970825
+    ]
+  },
+  {
+    "id": "coffee_martini",
+    "title": "Coffee Martini \u2014 N3V 18-camera rig",
+    "metric": "test PSNR 28.08 \u00b7 COLMAP + 4DGaussians",
+    "blurb": "Neural-3D-Video plenoptic kitchen scene. COLMAP calibration \u2192 4DGaussians dynerf; a focal-units fix and full-camera coverage lifted PSNR 13 \u2192 28 (published-level).",
+    "splat": "scenes/coffee_martini/scene.splat",
+    "video": "scenes/coffee_martini/orbit.mp4",
+    "video_label": "360\u00b0 orbit",
+    "center": [
+      3.4818,
+      -0.6236,
+      11.2864
+    ],
+    "radius": 18.2697,
+    "cam_pos": [
+      -4.545909698594987,
+      -1.2815771984250435,
+      0.9321752769105409
+    ],
+    "cam_lookat": [
+      -4.009408887614959,
+      -1.2860062112893542,
+      1.7760634588770974
+    ]
+  },
+  {
+    "id": "flame_steak",
+    "title": "Flame Steak \u2014 N3V (SpacetimeGaussians)",
+    "metric": "N3V \u00b7 SpacetimeGaussians (fast calib)",
+    "blurb": "Neural-3D-Video kitchen scene reconstructed with the SpacetimeGaussians backbone (per-frame COLMAP, ~1h vs 24h) \u2014 the fast-iteration algo path.",
+    "splat": "scenes/flame_steak/scene.splat",
+    "video": "scenes/flame_steak/path_video.mp4",
+    "video_label": "Camera path",
+    "cam_pos": [
+      -4.7357238551560155,
+      -1.2601873702303032,
+      1.597489896688513
+    ],
+    "cam_lookat": [
+      -4.1088167645383615,
+      -1.1663676367246092,
+      2.370914332130159
+    ]
+  },
+  {
+    "id": "basketball",
+    "title": "Basketball \u2014 Dynamic3DGaussians benchmark",
+    "metric": "12-cam benchmark \u00b7 pipeline validation",
+    "blurb": "The Dynamic3DGaussians multi-camera benchmark (synchronized rig) used as the Phase-0 validation that the end-to-end pipeline works before custom captures.",
+    "splat": "scenes/basketball/scene.splat",
+    "video": "scenes/basketball/basketball_orbit.mp4",
+    "video_label": "360\u00b0 orbit",
+    "center": [
+      -0.0536,
+      -1.1703,
+      0.0748
+    ],
+    "radius": 2.9454,
+    "cam_pos": [
+      -1.7571400000921271,
+      -3.122790000005548,
+      -1.153220000074427
+    ],
+    "cam_lookat": [
+      -1.1408650623921273,
+      -2.466221510605548,
+      -0.718337234274427
+    ]
+  }
+]

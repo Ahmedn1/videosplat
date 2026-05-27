@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>videosplat — free-viewpoint replay of dynamic multi-camera video</title>
+<style>
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  :root{--bg:#0b0d10;--card:#15181d;--line:#262b33;--fg:#e8eaed;--dim:#9aa3ad;--accent:#f97316}
+  body{background:var(--bg);color:var(--fg);font-family:system-ui,-apple-system,sans-serif;line-height:1.55}
+  a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+  header{max-width:1080px;margin:0 auto;padding:56px 24px 24px}
+  h1{font-size:2.1rem;letter-spacing:-.02em}
+  .tag{color:var(--dim);font-size:1.05rem;margin-top:10px;max-width:680px}
+  .links{margin-top:18px;display:flex;gap:10px;flex-wrap:wrap}
+  .btn{display:inline-block;background:var(--card);border:1px solid var(--line);color:var(--fg);
+       padding:7px 14px;border-radius:8px;font-size:.85rem}
+  .btn:hover{border-color:var(--accent);text-decoration:none}
+  .note{max-width:1080px;margin:0 auto;padding:0 24px;color:var(--dim);font-size:.85rem}
+  main{max-width:1080px;margin:0 auto;padding:28px 24px 64px;
+       display:grid;grid-template-columns:repeat(auto-fill,minmax(330px,1fr));gap:22px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;
+        display:flex;flex-direction:column}
+  .card video,.card .novid{width:100%;aspect-ratio:16/9;background:#000;object-fit:cover;display:block}
+  .novid{display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:.8rem}
+  .body{padding:15px 16px 17px;display:flex;flex-direction:column;gap:9px;flex:1}
+  .body h2{font-size:1.02rem}
+  .metric{align-self:flex-start;font-size:.72rem;color:var(--accent);border:1px solid #3a2a18;
+          background:#1d160d;padding:3px 9px;border-radius:999px}
+  .blurb{color:var(--dim);font-size:.85rem;flex:1}
+  .row{display:flex;gap:9px;align-items:center;margin-top:4px}
+  .view{background:var(--accent);color:#111;font-weight:600;padding:7px 13px;border-radius:8px;
+        font-size:.83rem}
+  .view:hover{text-decoration:none;opacity:.92}
+  .vlabel{color:var(--dim);font-size:.74rem}
+  footer{max-width:1080px;margin:0 auto;padding:0 24px 60px;color:var(--dim);font-size:.8rem}
+</style>
+</head>
+<body>
+<header>
+  <h1>videosplat</h1>
+  <p class="tag">Free-viewpoint replay of dynamic scenes from multi-camera video, via 4D Gaussian Splatting. Five reconstructions below — each shows a rendered fly-through plus a single-frame interactive splat you can orbit in your browser.</p>
+  <div class="links">
+    <a class="btn" href="https://github.com/Ahmedn1/videosplat">GitHub repo</a>
+    <a class="btn" href="https://github.com/Ahmedn1/videosplat/blob/main/Findings.md">Findings (5 datasets)</a>
+  </div>
+</header>
+<p class="note">Note: the interactive viewer loads a compact single-frame <code>.splat</code> (SH0, flat colour). The full 4D timeline player — every keyframe, view-dependent colour — runs locally via <code>videosplat view &lt;output&gt;</code> (the per-scene keyframes are multiple GB, too large to host).</p>
+<main id="grid"></main>
+<footer>Built with <a href="https://github.com/Ahmedn1/videosplat">videosplat</a> · viewer by <a href="https://github.com/mkkellogg/GaussianSplats3D">@mkkellogg/gaussian-splats-3d</a> · 3DGS © Inria/GRAPHDECO (research use).</footer>
+
+<script>
+fetch('scenes.json').then(r => r.json()).then(scenes => {
+  const grid = document.getElementById('grid');
+  for (const s of scenes) {
+    const card = document.createElement('div'); card.className = 'card';
+    const media = s.video
+      ? `<video src="${s.video}" controls loop muted playsinline preload="metadata"></video>`
+      : `<div class="novid">no rendered video</div>`;
+    const viewBtn = s.splat
+      ? `<a class="view" href="viewer.html?scene=${s.id}">🔮 Interactive view</a>`
+      : '';
+    const vlabel = s.video_label ? `<span class="vlabel">${s.video_label}</span>` : '';
+    card.innerHTML = `
+      ${media}
+      <div class="body">
+        <h2>${s.title}</h2>
+        <span class="metric">${s.metric || ''}</span>
+        <p class="blurb">${s.blurb || ''}</p>
+        <div class="row">${viewBtn}${vlabel}</div>
+      </div>`;
+    grid.appendChild(card);
+  }
+}).catch(e => { document.getElementById('grid').innerHTML = '<p style="color:#9aa3ad">Could not load scenes.json: ' + e.message + '</p>'; });
+</script>
+</body>
+</html>

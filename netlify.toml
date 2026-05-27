@@ -1,0 +1,10 @@
+# Netlify: serve the static demo gallery in docs/ as-is (no build step).
+[build]
+  publish = "docs"
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    # gaussian-splats-3d uses SharedArrayBuffer (web workers) → needs cross-origin isolation
+    Cross-Origin-Opener-Policy = "same-origin"
+    Cross-Origin-Embedder-Policy = "require-corp"
