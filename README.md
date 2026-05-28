@@ -4,7 +4,8 @@
 
 Point it at a folder of `camNN.mp4` clips of the same moment — a synced rig, a casual
 handful of phones, even moving/unsynced cameras — and it calibrates, trains a 4D
-Gaussian model, and bakes a browser viewer you can scrub and fly through.
+Gaussian model, and bakes a browser viewer you can scrub and fly through. Plot a
+custom camera path in-browser and render it to MP4 with one more command.
 
 ```bash
 videosplat run data/n3v/coffee_martini --algo 4dgs --name "Coffee Martini"
@@ -268,10 +269,13 @@ outputs/<scene>_splat4d/
 ├── model/
 │   ├── point_cloud/iteration_NNNNN/   # trained 4D model
 │   └── keyframes/keyframe_*.ply       # baked per-timestep snapshots
-└── viewer/                   # static web viewer (deployable)
-    ├── index.html            # 4D timeline player (scrub + fly-through)
-    ├── scene_meta.json       # cameras, bounds, fps, n_keyframes
-    └── frames/keyframe_*.ply
+├── viewer/                   # static web viewer (deployable)
+│   ├── index.html            # 4D timeline player (scrub + fly-through)
+│   ├── path_editor.html      # in-browser waypoint editor (created on demand)
+│   ├── scene_meta.json       # cameras, bounds, fps, n_keyframes
+│   └── frames/keyframe_*.ply
+├── camera_path.json         # waypoints exported from the path editor (optional)
+└── path_video.mp4           # cinematic render along the path (videosplat render-path)
 ```
 
 ---
@@ -292,6 +296,47 @@ plus a single-frame interactive `.splat`. Rebuild the demo assets with:
 python scripts/build_demo.py        # PLY→.splat + copies videos → docs/scenes/
 cd docs && python -m http.server 8088
 ```
+
+---
+
+## Custom fly-throughs: path editor + `render-path`
+
+The baked viewer is great for free orbiting, but the most useful thing for sharing a
+result is a **fixed cinematic pass** — your camera, your timing. videosplat ships an
+in-browser **path editor** and a renderer that flies a Catmull-Rom spline through
+your waypoints and emits an MP4 from the trained 4D model.
+
+![Path editor — placing waypoints on the AIST breakdance scene](docs/scenes/aist/path_editor.png)
+
+**Workflow.** Fly through the splat in your browser, drop waypoints at the views you
+want, export `camera_path.json`, then render. Renders use the same FOV you saw in the
+editor — what you frame is what you get.
+
+```bash
+# 1. open the path editor in the browser (orbit, click "+ add waypoint" at each pose)
+videosplat path-editor outputs/<scene>_splat4d
+
+# 2. render a smooth video along the exported waypoints
+videosplat render-path outputs/<scene>_splat4d \
+    --path camera_path.json \
+    --frames 240 --fps 30 \
+    --configs arguments/hypernerf/default.py     # only needed for casual/nerfies models
+```
+
+| Flag | Default | Notes |
+|---|---|---|
+| `--path` | `camera_path.json` | exported from the editor; list of `{pos, lookAt}` waypoints + viewer FOV |
+| `--frames` | `120` | spline samples; longer = slower, smoother |
+| `--fps` | `24` | output video frame rate |
+| `--width / --height` | `1280×720` | render resolution |
+| `--white-bg` | off | white background for the render |
+| `--configs` | — | 4DGaussians training config; **required** for casual/nerfies models so the deformation net matches |
+| `--save-file` | `<out>/path_video.mp4` | output MP4 path |
+
+Under the hood the renderer interpolates a Catmull-Rom spline through the waypoint
+positions and look-at targets, drives the trained 4DGaussians deformation field one
+frame at a time, and `ffmpeg`-encodes the result. The `orbit.mp4` clips in the live
+demo gallery were generated this way.
 
 ---
 
